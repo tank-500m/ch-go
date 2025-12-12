@@ -68,15 +68,26 @@ func (c *ColStr) Reset() {
 
 // EncodeColumn encodes String rows to *Buffer.
 func (c ColStr) EncodeColumn(b *Buffer) {
-	var buf [binary.MaxVarintLen64]byte
+	if len(c.Pos) == 0 {
+		return
+	}
+
+	var totalDataLen int
+	for _, p := range c.Pos {
+		totalDataLen += p.End - p.Start
+	}
+
+	estimatedCap := len(b.Buf) + totalDataLen + (len(c.Pos) * binary.MaxVarintLen64)
+
+	if cap(b.Buf) < estimatedCap {
+		newBuf := make([]byte, len(b.Buf), estimatedCap)
+		copy(newBuf, b.Buf)
+		b.Buf = newBuf
+	}
+
 	for _, p := range c.Pos {
 		length := uint64(p.End - p.Start)
-
-		// Encode to temp buffer first
-		n := binary.PutUvarint(buf[:], length)
-
-		// Append only the bytes we need
-		b.Buf = append(b.Buf, buf[:n]...)
+		b.Buf = binary.AppendUvarint(b.Buf, length)
 		b.Buf = append(b.Buf, c.Buf[p.Start:p.End]...)
 	}
 }
