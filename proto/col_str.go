@@ -2,6 +2,7 @@ package proto
 
 import (
 	"encoding/binary"
+	"slices"
 
 	"github.com/go-faster/errors"
 )
@@ -21,10 +22,13 @@ type ColStr struct {
 
 // Append string to column.
 func (c *ColStr) Append(v string) {
+	c.Buf = slices.Grow(c.Buf, len(v))
 	start := len(c.Buf)
+
 	c.Buf = append(c.Buf, v...)
-	end := len(c.Buf)
-	c.Pos = append(c.Pos, Position{Start: start, End: end})
+
+	c.Pos = slices.Grow(c.Pos, 1)
+	c.Pos = append(c.Pos, Position{Start: start, End: start + len(v)})
 }
 
 // AppendBytes append byte slice as string to column.
@@ -77,13 +81,8 @@ func (c ColStr) EncodeColumn(b *Buffer) {
 		totalDataLen += p.End - p.Start
 	}
 
-	estimatedCap := len(b.Buf) + totalDataLen + (len(c.Pos) * binary.MaxVarintLen64)
-
-	if cap(b.Buf) < estimatedCap {
-		newBuf := make([]byte, len(b.Buf), estimatedCap)
-		copy(newBuf, b.Buf)
-		b.Buf = newBuf
-	}
+	neededSize := totalDataLen + (len(c.Pos) * binary.MaxVarintLen64)
+	b.Buf = slices.Grow(b.Buf, neededSize)
 
 	for _, p := range c.Pos {
 		length := uint64(p.End - p.Start)
